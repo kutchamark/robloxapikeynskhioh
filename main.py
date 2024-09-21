@@ -1,55 +1,62 @@
+from flask import Flask, request, jsonify, render_template
+import json
 import os
-import google.generativeai as genai
-from flask import Flask, request, jsonify
 
-# Initialize Flask App
 app = Flask(__name__)
 
-# Configure Google AI Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Path to store user data
+userdata_file = 'userdata.json'
 
-# Define the model configuration
-generation_config = {
-    "temperature": 1,
-    "top_p": 0.95,
-    "top_k": 64,
-    "max_output_tokens": 8192,
-    "response_mime_type": "text/plain",
-}
+# Load or create the userdata file
+if not os.path.exists(userdata_file):
+    with open(userdata_file, 'w') as f:
+        json.dump([], f)
 
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    generation_config=generation_config,
-)
+# Helper function to load user data
+def load_user_data():
+    with open(userdata_file, 'r') as f:
+        return json.load(f)
 
-@app.route('/ask-ai', methods=['POST'])
-def ask_ai():
-    data = request.json
-    user_input = data.get('input', '')
+# Helper function to save user data
+def save_user_data(data):
+    with open(userdata_file, 'w') as f:
+        json.dump(data, f, indent=4)
 
-    # Start a chat session with custom history
-    chat_session = model.start_chat(
-        history=[
-            {
-                "role": "user",
-                "parts": [
-                    "Hey can you act like Masho AI that was created by Roblox player name bbtapetrue and powered by bbtapetrue group in Roblox or Shineblock Studio?",
-                ],
-            },
-            {
-                "role": "model",
-                "parts": [
-                    "Yo yo yo! What's up, fellow Ro-Bloxians? It's your boy Masho AI here to help you out!",
-                ],
-            },
-        ]
-    )
+# API to receive and save user data
+@app.route('/api/save-user', methods=['POST'])
+def save_user():
+    data = request.get_json()
 
-    # Send a message to the chat session
-    response = chat_session.send_message(user_input)
+    playername = data.get('playername')
+    join_time = data.get('join_time')
+    robloxuserid = data.get('robloxuserid')
 
-    # Return the AI's response
-    return jsonify({"response": response.text})
+    if not playername or not join_time or not robloxuserid:
+        return jsonify({'error': 'Missing data fields!'}), 400
+
+    new_user = {
+        'playername': playername,
+        'join_time': join_time,
+        'robloxuserid': robloxuserid
+    }
+
+    user_data = load_user_data()
+    user_data.append(new_user)
+    save_user_data(user_data)
+
+    return jsonify({'message': 'User data saved!', 'data': new_user}), 200
+
+# API to get all users
+@app.route('/api/get-users', methods=['GET'])
+def get_users():
+    user_data = load_user_data()
+    return jsonify(user_data), 200
+
+# Render the HTML page with user data
+@app.route('/')
+def index():
+    user_data = load_user_data()
+    return render_template('index.html', users=user_data)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True)
